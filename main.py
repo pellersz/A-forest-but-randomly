@@ -25,11 +25,11 @@ def _handle_missing_values(df):
     return df
 
 
-def discretize_target(y, outcome_count):
-    for i in range(outcome_count):
-        y.iloc[i] = math.floor(y.iloc[i] * outcome_count);
-
-    return y
+#def discretize_target(y, outcome_count):
+#    for i in range(outcome_count):
+#        y.loc[yi] = np.floor(y.iloc[i] * outcome_count);
+#
+#    return y
 
 
 def setup_data(
@@ -45,17 +45,14 @@ def setup_data(
         print("No cached data\nRetrieving dataset from the repository")
         fetched_data = fetch_ucirepo(id=183) 
 
-        #original = fetched_data.data.original
-        #original = original.drop(columns=non_predictive_columns)
-        #original = _handle_missing_values(original)
-
         X = fetched_data.data.features
         X = X.drop(columns=non_predictive_columns)
         X = _handle_missing_values(X)
 
-        y = discretize_target(fetched_data.data.targets["ViolentCrimesPerPop"], outcome_count)
-
-        #print(y, type(y))
+        y = fetched_data.data.targets.ViolentCrimesPerPop
+        y *= outcome_count * 0.9999
+        y = np.floor(y)
+        y = y.astype(np.int64)
 
         res = (X, y)
 
@@ -84,13 +81,13 @@ def evaluate_model(forest, X, y):
 def main(outcome_count = 2, training_percentage = 0.8, tree_count = 100, data_per_tree = 100, max_height = 20):
     print("Getting data")
     X, y = setup_data(outcome_count=outcome_count) 
-    
+
     print("Creating training and test datasets")
     X_tr, y_tr, X_te, y_te = divide_data(X, y, training_percentage)
     
     print("Starting training")
     start = perf_counter()
-    forest = RandomForest(X_tr, y_tr.iloc, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
+    forest = RandomForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
     end = perf_counter()
     print(f"Training took {end - start} μs")
 
