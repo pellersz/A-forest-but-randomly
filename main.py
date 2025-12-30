@@ -7,6 +7,7 @@ import pickle as pl
 import math
 import numpy as np
 import pandas as pd
+import sklearn as sk
 from pandas.core.window.common import flex_binary_moment
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -15,6 +16,7 @@ from functools import cache
 from ucimlrepo import fetch_ucirepo
 from random import shuffle
 from time import perf_counter
+
 
 #TODO: multiply continuous with 0.999
 
@@ -74,7 +76,10 @@ def divide_data(X, y, training_percentage):
 def evaluate_model(forest, X, y):
     count = 0
     for i in range(len(X)):
-        count += (forest.evaluate(X.iloc[i]) == y[i])
+        if type(forest) == RandoForest:
+            count += (forest.evaluate(X.iloc[i]) == y[i])
+        else:
+            count += (forest.predict(X.reindex([X.index[i]])) == y[i])
 
     return count / len(X)
 
@@ -85,7 +90,27 @@ def main(outcome_count = 2, training_percentage = 0.8, tree_count = 100, data_pe
 
     print("Creating training and test datasets")
     X_tr, y_tr, X_te, y_te = divide_data(X, y, training_percentage)
-   
+ 
+    print("Starting training for sklearn")
+    start = perf_counter()
+
+    #forest = RandomForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
+    forest = sk.ensemble.RandomForestClassifier()
+    forest.fit(X_tr, y_tr)
+    end = perf_counter()
+    print(f"Training took {end - start} s") 
+
+    percent = evaluate_model(forest, X_te, y_te.iloc)
+    print(f"Test correctness: {percent * 100}%")
+    percent = evaluate_model(forest, X_tr, y_tr.iloc)
+    print(f"Training correctness: {percent * 100}%")
+
+    counter = 0
+    for i in range(len(y_te)):
+        counter += (y_te.iloc[i] == 0)
+    print(counter / len(y_te))
+
+
     print("Starting training")
     start = perf_counter()
 

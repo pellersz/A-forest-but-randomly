@@ -86,9 +86,51 @@ class DecisionTree:
         
         return (res, best_divider)
 
+    
+    def calculate_gini(self, X, y, category_count, number_of_labels):
+        n = len(X)
+        res = -10000.0
+
+        for i in range(category_count):
+            for j in range(number_of_labels + 1):
+                self.training_helper[i][j] = 0
+
+        self.training_helper[1][number_of_labels] = n
+        for i in range(n):
+            self.training_helper[1][y[i]] += 1
+
+        column = X.sort_values().iloc
+
+        best_divider = 0.0
+        for i in range(1, n):
+            self.training_helper[1][y[i - 1]] -= 1
+            self.training_helper[1][number_of_labels] -= 1
+            self.training_helper[0][y[i - 1]] += 1
+            self.training_helper[0][number_of_labels] += 1
+            
+            if column[i - 1] != column[i]:
+                new_res = 0.0
+                divider = (column[i - 1] + column[i]) / 2
+                for ii in range(category_count):
+                    child_entropy = 0.0
+                    for j in range(number_of_labels):
+                        if self.training_helper[ii][j] == 0:
+                            continue
+
+                        p = self.training_helper[ii][j] / self.training_helper[ii][number_of_labels]
+                        child_entropy -= p ** 2 
+                
+                    new_res -= (self.training_helper[ii][number_of_labels] / n) * child_entropy
+                    
+                if res < new_res:
+                    res = new_res
+                    best_divider = divider
+        
+        return (res, best_divider)
+
 
     def __init__(self, X, y, features, height_left, number_of_labels):
-        print(len(X), 20 - height_left)
+        #print(len(X), 20 - height_left)
 
         n = len(X)
         last_same = 0
@@ -144,7 +186,7 @@ class DecisionTree:
             #print("vell", X[curr_feature[0]])
             #print("unvell", X[curr_feature[0]])
             #csopi = X[curr_feature[0]].copy()
-            gain, divider_for_feature = self.calculate_gain(X[curr_feature[0]], yloc, curr_feature[1], curr_feature[2], number_of_labels)
+            gain, divider_for_feature = self.calculate_gini(X[curr_feature[0]], yloc, curr_feature[2], number_of_labels)
             if gain > best_gain:
                 best_gain = gain
                 best_feature_ind = i
@@ -162,7 +204,7 @@ class DecisionTree:
         #print("4")
         self.children = []
         #print("5")
-        features.pop(best_feature_ind)
+        #features.pop(best_feature_ind)
 
         #print("izi")
     
@@ -215,7 +257,7 @@ class DecisionTree:
         if self.is_categorical:#might need an index 0
             return self.children[x[self.best_feature]].evaluate(x)
         
-        return self.children[0].evaluate(x) if x[self.best_feature] < self.divider else self.children[1].evaluate(x)
+        return self.children[0].evaluate(x) if x[self.best_feature] > self.divider else self.children[1].evaluate(x)
 
 
 def do_it(X, y, features, max_height, number_of_labels, idx, dest):
