@@ -4,19 +4,12 @@
 from random_forest import RandomForest 
 from rando_forest import RandoForest
 import pickle as pl
-import math
 import numpy as np
 import pandas as pd
 import sklearn as sk
-from pandas.core.window.common import flex_binary_moment
-import seaborn as sns
-import matplotlib.pyplot as plt
-from pathlib import Path
-from functools import cache
 from ucimlrepo import fetch_ucirepo
-from random import shuffle
 from time import perf_counter
-
+from statistics import mean
 
 #TODO: multiply continuous with 0.999
 
@@ -63,14 +56,14 @@ def setup_data(
         return res 
 
 
-def divide_data(X, y, training_percentage):
-    final_index = int(len(X) * training_percentage)
-
-    permute = np.random.permutation(X.index)
-    X = X.reindex(permute)
-    y = y.reindex(permute)
-
-    return (X[:final_index], y[:final_index], X[final_index:], y[final_index:])
+#def divide_data(X, y, training_percentage):
+#    final_index = int(len(X) * training_percentage)
+#
+#    permute = np.random.permutation(X.index)
+#    X = X.reindex(permute)
+#    y = y.reindex(permute)
+#
+#    return (X[:final_index], y[:final_index], X[final_index:], y[final_index:])
 
 
 def evaluate_model(forest, X, y):
@@ -84,50 +77,222 @@ def evaluate_model(forest, X, y):
     return count / len(X)
 
 
-def main(outcome_count = 2, training_percentage = 0.8, tree_count = 100, data_per_tree = 100, max_height = 20):
+def tree_count_search(X_tr, y_tr, X_te, y_te, min_tree_count = 1, max_tree_count = 100, data_per_tree = 150):
+    for tree_count in range(min_tree_count, max_tree_count + 1):
+        test_accuracy = 0;
+        train_accuracy = 0;
+        time_used = 0;
+        for _ in range(2):
+            for method in ("gini", "gain"):
+                start = perf_counter()
+                forest = RandoForest(X_tr, y_tr, X_tr.keys(), tree_count, data_per_tree, 20, method, 2)
+                time_used += perf_counter() - start
+                test_accuracy += evaluate_model(forest, X_te, y_te.iloc)
+                train_accuracy += evaluate_model(forest, X_tr, y_tr.iloc)
+                
+        print(f"test accuracy = {test_accuracy / 4}, train accuracy = {train_accuracy / 4}, in {time_used / 4} seconds with parameters: tree_count = {tree_count}, data_per_tree = {data_per_tree}")
+
+
+def hyper_parameter_search(X_tr, y_tr, X_te, y_te, min_tree_count = 1, max_tree_count = 15, min_data_per_tree = 10, max_data_per_tree = 150):
+    best_test = 0
+    best_train = 0
+
+
+    for s in range(min_tree_count + min_data_per_tree, max_data_per_tree + max_tree_count + 1):
+        for tree_count in range(min_tree_count, max_tree_count + 1):
+            for method in ("gini", "gain"):
+                data_per_tree = s - tree_count
+                if data_per_tree > max_data_per_tree:
+                    continue
+                if data_per_tree < min_data_per_tree:
+                    break
+
+                start = perf_counter()
+                forest = RandoForest(X_tr, y_tr, X_tr.keys(), tree_count, data_per_tree, 20, method, 2)
+                time_used = perf_counter() - start
+                evaluation_test = evaluate_model(forest, X_te, y_te.iloc)
+                evaluation_train = evaluate_model(forest, X_tr, y_tr.iloc)
+                
+                if evaluation_test > best_test:
+                    best_test = evaluation_test
+                    yes_test = "*"
+                elif evaluation_test == best_test:
+                    yes_test = ":"
+                else:
+                    yes_test = ""
+
+                if evaluation_train > best_train:
+                    best_train = evaluation_train
+                    yes_train = "+"
+                elif evaluation_train == best_train:
+                    yes_train = "-"
+                else:
+                    yes_train = ""
+
+                if yes_test != "" or yes_train != "":
+                    print(f"{yes_test}{yes_train} test accuracy = {evaluation_test}, train accuracy = {evaluation_train}, in {time_used} seconds with parameters: tree_count = {tree_count}, data_per_tree = {data_per_tree}, method = {method}")
+            
+
+def eval_model(forest_type, division, X, y, outcome_count = 2, tree_count = 100, data_per_tree = 100, max_height = 20):
+    chunk_size = len(X) / division
+    time_used = 0 
+    print(f"test started for {forest_type}")
+
+    accuracy = division * [0]
+    precision = division * [0]
+    recall = division * [0]
+    specificity = division * [0]
+    
+    accuracy2 = division * [0]
+    precision2 = division * [0]
+    recall2 = division * [0]
+    specificity2 = division * [0]
+    for i in range(division):
+        X_tr = X.iloc[lambda x: (i * chunk_size > x.index) | ((i + 1) * chunk_size <= x.index)]
+        y_tr = y.iloc[lambda x: (i * chunk_size > x.index) | ((i + 1) * chunk_size <= x.index)] 
+        X_te = X.iloc[lambda x: (i * chunk_size <= x.index) & ((i + 1) * chunk_size > x.index)]
+        y_te = y.iloc[lambda x: (i * chunk_size <= x.index) & ((i + 1) * chunk_size > x.index)]
+
+        start = perf_counter()
+        if forest_type == RandoForest:
+            forest = RandoForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, "gini", outcome_count)
+            evaluate = forest.evaluate
+ 
+        else:
+            forest = sk.ensemble.RandomForestClassifier(n_estimators=tree_count)
+            forest.fit(X_tr, y_tr)
+            evaluate = forest.predict
+
+        time_used += perf_counter() - start
+
+        tp = 0
+        fp = 0
+        tn = 0
+        fn = 0
+        for j in range(len(X_te)):
+            if forest_type == RandoForest: 
+                pred_label = evaluate(X_te.iloc[j])
+            else:
+                pred_label = evaluate(X_te.reindex([X_te.index[j]]))
+
+            true_label = y_te.iloc[j]
+
+            if pred_label == 1 and true_label == 1:
+                tp += 1
+            elif pred_label == 1:
+                fp += 1
+            elif true_label == 1:
+                fn += 1
+            else:
+                tn += 1
+        accuracy[i] = (tp + tn) / len(X_tr)
+        precision[i] = tp / (tp + fp)
+        recall[i] = tp / (tp + fn)
+        specificity[i] = tn / (tn + fp)
+
+
+        tp = 0
+        fp = 0
+        tn = 0
+        fn = 0
+        for j in range(len(X_tr)):
+            if forest_type == RandoForest: 
+                pred_label = evaluate(X_tr.iloc[j])
+            else:
+                pred_label = evaluate(X_tr.reindex([X_tr.index[j]]))
+
+            true_label = y_tr.iloc[j]
+
+            if pred_label == 1 and true_label == 1:
+                tp += 1
+            elif pred_label == 1:
+                fp += 1
+            elif true_label == 1:
+                fn += 1
+            else:
+                tn += 1
+        accuracy2[i] = (tp + tn) / len(X_tr)
+        precision2[i] = tp / (tp + fp)
+        recall2[i] = tp / (tp + fn)
+        specificity2[i] = tn / (tn + fp)
+
+        print(f"finished round {i + 1}")
+
+    print(f"Test finished for {forest_type} in time {time_used} seconds")
+    
+    print(f"avg. test accuracy: {mean(accuracy)}")
+    print(f"avg. test precision: {mean(precision)}")
+    print(f"avg. test recall: {mean(recall)}")
+    print(f"avg. test specificity {mean(specificity)}")
+    print(f"avg. test f-score: {2 / ((1 / mean(precision)) + (1 / mean(recall)))}")
+
+    print(f"avg. training accuracy: {mean(accuracy2)}")
+    print(f"avg. training precision: {mean(precision2)}")
+    print(f"avg. training recall: {mean(recall2)}")
+    print(f"avg. training specificity {mean(specificity2)}")
+    print(f"avg. training f-score: {2 / ((1 / mean(precision2)) + (1 / mean(recall2)))}")
+
+    print("")
+        
+
+def main(outcome_count = 2, division = 3):
     print("Getting data")
     X, y = setup_data(outcome_count=outcome_count) 
+    print("")
 
-    print("Creating training and test datasets")
-    X_tr, y_tr, X_te, y_te = divide_data(X, y, training_percentage)
- 
-    print("Starting training for sklearn")
-    start = perf_counter()
+    permute = np.random.permutation(X.index)
+    X = X.reindex(permute)
+    X = X.reset_index(drop=True)
+    y = y.reindex(permute)
+    y = y.reset_index(drop=True)
 
-    #forest = RandomForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
-    forest = sk.ensemble.RandomForestClassifier()
-    forest.fit(X_tr, y_tr)
-    end = perf_counter()
-    print(f"Training took {end - start} s") 
-
-    percent = evaluate_model(forest, X_te, y_te.iloc)
-    print(f"Test correctness: {percent * 100}%")
-    percent = evaluate_model(forest, X_tr, y_tr.iloc)
-    print(f"Training correctness: {percent * 100}%")
-
-    counter = 0
-    for i in range(len(y_te)):
-        counter += (y_te.iloc[i] == 0)
-    print(counter / len(y_te))
-
-
-    print("Starting training")
-    start = perf_counter()
-
-    #forest = RandomForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
-    forest = RandoForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
-    end = perf_counter()
-    print(f"Training took {end - start} s") 
-
-    percent = evaluate_model(forest, X_te, y_te.iloc)
-    print(f"Test correctness: {percent * 100}%")
-    percent = evaluate_model(forest, X_tr, y_tr.iloc)
-    print(f"Training correctness: {percent * 100}%")
+    #final_index = int(len(X) * 0.8)
+    #tree_count_search(X[:final_index], y[:final_index], X[final_index:], y[final_index:])
+    #hyper_parameter_search(X[:final_index], y[:final_index], X[final_index:], y[final_index:])
     
-    counter = 0
-    for i in range(len(y_te)):
-        counter += (y_te.iloc[i] == 0)
-    print(counter / len(y_te))
+    eval_model(sk.ensemble.RandomForestClassifier, division, X, y)
+    eval_model(RandoForest, division, X, y, outcome_count=outcome_count)
+
+    #print("Creating training and test datasets")
+    #X_tr, y_tr, X_te, y_te = divide_data(X, y, training_percentage)
+ 
+    #print("Starting training for sklearn")
+    #start = perf_counter()
+
+    #forest = RandomForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
+    #forest = sk.ensemble.RandomForestClassifier()
+    #forest.fit(X_tr, y_tr)
+    #end = perf_counter()
+    #print(f"Training took {end - start} s") 
+
+    #evaluate_model(forest, X_te, y_te.iloc)
+    #print(f"Test correctness: {percent * 100}%")
+    #percent = evaluate_model(forest, X_tr, y_tr.iloc)
+    #print(f"Training correctness: {percent * 100}%")
+
+    #counter = 0
+    #for i in range(len(y_te)):
+    #    counter += (y_te.iloc[i] == 0)
+    #print(counter / len(y_te))
+
+
+    #print("Starting training")
+    #start = perf_counter()
+
+    ##forest = RandomForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
+    #forest = RandoForest(X_tr, y_tr, X.keys(), tree_count, data_per_tree, max_height, outcome_count)
+    #end = perf_counter()
+    #print(f"Training took {end - start} s") 
+
+    #percent = evaluate_model(forest, X_te, y_te.iloc)
+    #print(f"Test correctness: {percent * 100}%")
+    #percent = evaluate_model(forest, X_tr, y_tr.iloc)
+    #print(f"Training correctness: {percent * 100}%")
+    
+    #counter = 0
+    #for i in range(len(y_te)):
+    #    counter += (y_te.iloc[i] == 0)
+    #print(counter / len(y_te))
 
 
 if __name__ == "__main__":
