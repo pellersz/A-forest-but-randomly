@@ -220,7 +220,6 @@ def do_it(X, y, features, max_height, method, number_of_labels, idx, dest):
 class RandoForest:
     def __init__(self, X, y, feature_names, tree_count, data_per_tree, max_height, method, number_of_labels):
         self.number_of_labels = number_of_labels
-        self.tree_count = tree_count
         self.trees = tree_count * [None]
         self.count = number_of_labels * [0]
         features = []
@@ -248,10 +247,8 @@ class RandoForest:
         for t in threads:
             t.start()
         
-        count = 0
         for t in threads:
             t.join()
-            count += 1
           
 
     def evaluate(self, x):
