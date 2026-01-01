@@ -138,6 +138,7 @@ def eval_model(forest_type, division, X, y, outcome_count = 2, tree_count = 100,
     time_used = 0 
     print(f"test started for {forest_type}")
 
+    # TODO: why did you make an array?
     accuracy = division * [0]
     precision = division * [0]
     recall = division * [0]
@@ -185,7 +186,7 @@ def eval_model(forest_type, division, X, y, outcome_count = 2, tree_count = 100,
                 fn += 1
             else:
                 tn += 1
-        accuracy[i] = (tp + tn) / len(X_tr)
+        accuracy[i] = (tp + tn) / len(X_te)
         precision[i] = tp / (tp + fp)
         recall[i] = tp / (tp + fn)
         specificity[i] = tn / (tn + fp)

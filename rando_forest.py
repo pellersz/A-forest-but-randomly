@@ -26,18 +26,20 @@ class DecisionTree:
                     if self.training_helper[i][j] == 0:
                         continue
 
-                    p = float(self.training_helper[i][j]) / self.training_helper[i][number_of_labels]
+                    p = self.training_helper[i][j] / self.training_helper[i][number_of_labels]
                     child_entropy -= p * math.log(p)
                 
                 res -= (self.training_helper[i][number_of_labels] / n) * child_entropy
             
             return (res, 0)
 
+        X = X.sort_values()
+        y = y.reindex_like(X).iloc
+        column = X.iloc
+
         self.training_helper[1][number_of_labels] = n
         for i in range(n):
             self.training_helper[1][y[i]] += 1
-
-        column = X.sort_values().iloc
 
         best_divider = 0.0
         for i in range(1, n):
@@ -75,11 +77,13 @@ class DecisionTree:
             for j in range(number_of_labels + 1):
                 self.training_helper[i][j] = 0
 
+        X = X.sort_values()
+        y = y.reindex_like(X).iloc
+        column = X.iloc
+
         self.training_helper[1][number_of_labels] = n
         for i in range(n):
             self.training_helper[1][y[i]] += 1
-
-        column = X.sort_values().iloc
 
         best_divider = 0.0
         for i in range(1, n):
@@ -94,9 +98,6 @@ class DecisionTree:
                 for ii in range(category_count):
                     child_entropy = 0.0
                     for j in range(number_of_labels):
-                        if self.training_helper[ii][j] == 0:
-                            continue
-
                         p = self.training_helper[ii][j] / self.training_helper[ii][number_of_labels]
                         child_entropy -= p * p 
                 
@@ -160,7 +161,7 @@ class DecisionTree:
 
         for i in range(len(features)):
             curr_feature = features[i]
-            gain, divider_for_feature = self.method(X[curr_feature[0]], yloc, curr_feature[1],curr_feature[2], number_of_labels)
+            gain, divider_for_feature = self.method(X[curr_feature[0]], y, curr_feature[1],curr_feature[2], number_of_labels)
             if gain > best_gain:
                 best_gain = gain
                 best_feature_ind = i
@@ -185,9 +186,9 @@ class DecisionTree:
             for i in range(self.child_count):
                 if len(indexes[i]) != 0:
                     new_child = DecisionTree(X.reindex(indexes[i]), y.reindex(indexes[i]), features.copy(), height_left - 1, method, number_of_labels)
-                    self.children[i] = new_child
+                    self.children.append(new_child)
                 else:
-                    self.children[i] = None
+                    self.children.append(None)
 
             return
 
