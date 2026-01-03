@@ -3,6 +3,7 @@ setup.py           uv.lock
 
 *.c
 *.so
+*.html
 build
 cached_obj
 pyrightconfig.json

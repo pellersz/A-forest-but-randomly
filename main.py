@@ -1,7 +1,7 @@
 # Implementation of the random forest (classification) ML algorithm 
 # Evaluated on crime statistics at https://archive.ics.uci.edu/dataset/183/communities+and+crime
 
-from rrr import RandomForest
+from random_forest import RandomForest
 #from random_forest import RandomForest 
 from rando_forest import RandoForest
 import pickle as pl
@@ -12,6 +12,9 @@ import pandas as pd
 import sklearn as sk
 from ucimlrepo import fetch_ucirepo
 from time import perf_counter
+import matplotlib.pyplot as plt
+from lime.lime_tabular import LimeTabularExplainer
+
 
 def _handle_missing_values(df):
     for col in df.columns:
@@ -142,7 +145,7 @@ def hyper_parameter_search(X_tr, y_tr, X_te, y_te, min_tree_count = 1, max_tree_
                     else:
                         tn += 1
 
-                vals[tree_count - min_tree_count][data_per_tree - min_data_per_tree][5] = (tp + tn) / len(X_te)
+                vals[tree_count - min_tree_count][data_per_tree - min_data_per_tree][5] = (tp + tn) / len(X_tr)
                 vals[tree_count - min_tree_count][data_per_tree - min_data_per_tree][6] = (0 if tp == 0 else tp / (tp + fp))
                 vals[tree_count - min_tree_count][data_per_tree - min_data_per_tree][7] = (0 if tp == 0 else tp / (tp + fn))
                 vals[tree_count - min_tree_count][data_per_tree - min_data_per_tree][8] = (0 if tn == 0 else tn / (tn + fp))
@@ -173,6 +176,7 @@ def hyper_parameter_search(X_tr, y_tr, X_te, y_te, min_tree_count = 1, max_tree_
         print(curr_count / full_count)     
 
     pl.dump(vals, open("cached_res", "wb"))
+
 
 def eval_model(forest_type, division, X, y, outcome_count = 2, tree_count = 100, data_per_tree = 100, max_height = 20):
     chunk_size = len(X) / division
@@ -276,7 +280,46 @@ def eval_model(forest_type, division, X, y, outcome_count = 2, tree_count = 100,
     print(f"avg. training f-score: {2 / ((1 / (precision_tr / division)) + (1 / (recall_tr / division)))}")
 
     print("")
-        
+
+
+def make_some_plots():
+    stats = pl.load(open("cached_res", "rb"))
+    stat_names = [
+                    "test accuracy", 
+                    "test precision", 
+                    "test recall", 
+                    "test specificity", 
+                    "test f-score", 
+                    "training accuracy", 
+                    "training precision", 
+                    "training recall",
+                    "training specificity",
+                    "training f-score",
+                    "training to converge"
+                ]
+
+    for i in range(len(stat_names)):
+        if i == 5:
+            layer = np.array([[a[i] / 4 for a in b] for b in stats])
+        else:
+            layer = np.array([[a[i] for a in b] for b in stats])
+
+        plt.imshow(layer, cmap='viridis', extent=(30.0, 150.0, 100.0, 1.0))
+        plt.xlabel("data amount per tree")
+        plt.ylabel("number of trees")
+        plt.colorbar(label=stat_names[i])
+
+        plt.show()
+
+
+def explain_this(X_tr, y_tr, X_te, y_te):
+    forest = RandomForest(X_tr, y_tr, X_tr.keys(), 100, 100, 20, "gini", 2)
+    explainer = LimeTabularExplainer(training_data=X_tr.to_numpy(), training_labels=y_tr.to_numpy(), feature_names=X_tr.keys(), class_names=("low", "high"))
+    print(y_te.to_numpy()[0])
+    expl = explainer.explain_instance(X_te.to_numpy()[0], forest.predict_proba, num_features=10, num_samples=300)
+    file = open("explanation.html", "w")
+    file.write(expl.as_html())
+
 
 def main(outcome_count = 2, division = 10):
     print("Getting data")
@@ -289,14 +332,18 @@ def main(outcome_count = 2, division = 10):
     y = y.reindex(permute)
     y = y.reset_index(drop=True)
 
+    #make_some_plots()
+
     final_index = int(len(X) * 0.8)
     #tree_count_search(X[:final_index], y[:final_index], X[final_index:], y[final_index:])
     #hyper_parameter_search(X[:final_index], y[:final_index], X[final_index:], y[final_index:])
-    
-    #RandomForest(X, y, X.keys(), 1, 100, 20, "gain", 2)
+  
+    explain_this(X[:final_index], y[:final_index], X[final_index:], y[final_index:])
+    exit(0)
 
-    eval_model(RandomForest, division, X, y, tree_count=10, outcome_count=outcome_count)
-    #eval_model(RandoForest, division, X, y, outcome_count=outcome_count)
+
+    eval_model(RandomForest, division, X, y, tree_count=100, data_per_tree=150, max_height=1000, outcome_count=outcome_count)
+    exit(0)
     eval_model(sk.ensemble.RandomForestClassifier, division, X, y, tree_count=10, outcome_count=outcome_count)
     eval_model(RandomForest, division, X, y, tree_count=100, outcome_count=outcome_count)
     eval_model(sk.ensemble.RandomForestClassifier, division, X, y, tree_count=100, outcome_count=outcome_count)

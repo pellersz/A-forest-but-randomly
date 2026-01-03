@@ -4,6 +4,6 @@ import numpy
 
 setup(
     name='Random forest implementation',
-    ext_modules=cythonize("rrr.pyx"),
+    ext_modules=cythonize("random_forest.pyx"),
     include_dirs=[numpy.get_include()]
 )
