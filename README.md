@@ -1,12 +1,16 @@
-### Random forest implemenation 
-Not much else to say about it
+### Random forest 
+This project contains an implementation of the Random Forest algorithm and also some testing done with it.
 
 #### How to build
 run `uv run setup.py build_ext --inplace` then `uv run main.py` or just run the `full_run.sh` script
 
 #### Features
-- The tree is implemented with Cython so have fun reading reference counting and memory allocations
-- It should work faster if ran with a python version which supports free-threading (once I implement it :P)
+- Built with cython and with multithreading (disable GIL for large speedups)
+
+#### Some comparisons to sklearn
+- The training time is comparable to the sklearn implementation (≈ 1.1-1.2 the time it takes for sklearn to converge)
+- Test data metrics such as accuracy approximately the same as the sklearn implementation
+- Training data metrics slightly better than testing data metrics but not as good as the sklearn implementation
 
 #### Tested on 
 https://archive.ics.uci.edu/dataset/183/communities+and+crime
